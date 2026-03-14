@@ -16,12 +16,14 @@ namespace Acp.ConsoleTest;
 /// </summary>
 class Program
 {
+    static string cursorCLI = @"C:\Users\quand\AppData\Local\cursor-agent\agent.cmd";
+    static string opencodeCLI = @"C:\Users\quand\AppData\Roaming\npm\opencode.cmd";
+    static string qwen = @"C:\Users\quand\AppData\Roaming\npm\qwen.cmd";
     static async Task Main(string[] args)
     {
-        string cursorCLI= @"C:\Users\quand\AppData\Local\cursor-agent\agent.cmd";
-        string opencodeCLI=@"C:\Users\quand\AppData\Roaming\npm\opencode.cmd";
+        
         // Parse arguments
-        var command = opencodeCLI;
+        var command = getCliPath("");
         var commandArgs = new List<string> { "acp" };
         
         if (args.Length > 0 && args[0] == "--test")
@@ -39,9 +41,9 @@ class Program
         // Parse --command and --args
         for (int i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--command" && i + 1 < args.Length)
+            if (args[i] == "--cli" && i + 1 < args.Length)
             {
-                command = args[i + 1];
+                command = getCliPath(args[i + 1]);
                 i++;
             }
             else if (args[i] == "--args" && i + 1 < args.Length)
@@ -75,6 +77,19 @@ class Program
             Console.Error.WriteLine($"Error: {ex.Message}");
         }
     }
+    static private string getCliPath(String cli)
+    {
+        switch (cli.Trim())
+        {
+            case "opencode":return opencodeCLI;
+            case "cursor":return cursorCLI;
+             case "qwen":return qwen;
+            case "agent": return cursorCLI;
+            default: return opencodeCLI;
+
+        }
+    }
+
 
     static async Task RunAgentModeAsync()
     {

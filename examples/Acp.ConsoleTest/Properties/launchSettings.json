@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Acp.ConsoleTest": {
+      "commandName": "Project",
+      "commandLineArgs": "--cli opencode"
+    }
+  }
+}

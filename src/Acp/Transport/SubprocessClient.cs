@@ -19,8 +19,10 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
     private readonly string _command;
     private readonly string[] _args;
     private readonly SubprocessClientOptions? _options;
+    private readonly CancellationTokenSource? _internalCts;
     private ClientConnection? _connection;
     private Process? _process;
+    private Task? _stderrReaderTask;
 
     /// <summary>Current session ID; set by caller after SessionNewAsync / SessionLoadAsync.</summary>
     public string CurrentSessionId { get; set; } = "";
@@ -30,10 +32,14 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
         _command = command ?? throw new ArgumentNullException(nameof(command));
         _args = args ?? Array.Empty<string>();
         _options = options;
+        _internalCts = new CancellationTokenSource();
     }
 
     /// <summary>Connection to the subprocess agent; null until <see cref="StartAsync"/> has been called.</summary>
     protected ClientConnection? Connection => _connection;
+
+    /// <summary>Indicates whether the subprocess has exited.</summary>
+    public bool HasExited => _process == null || _process.HasExited;
 
     /// <summary>Throws if connection is not established (StartAsync not called or already stopped).</summary>
     protected ClientConnection GetConnectionOrThrow()
@@ -62,31 +68,76 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
         startInfo.CreateNoWindow = true;
 
         _process = new Process { StartInfo = startInfo };
+        _process.EnableRaisingEvents = true;
         _process.Start();
 
         var processInput = _process.StandardInput;
         var processOutput = _process.StandardOutput;
         var processStderr = _process.StandardError;
 
-        if (_options?.Stderr != null)
-            StartStderrReader(processStderr, _options.Stderr, cancellationToken);
+        if (_options?.Stderr != null && processStderr != null)
+            _stderrReaderTask = StartStderrReader(processStderr, _options.Stderr, _internalCts!.Token);
 
         _connection = new ClientConnection(this, processOutput, processInput);
-        _ = _connection.ListenAsync(cancellationToken);
+        _ = _connection.ListenAsync(_internalCts!.Token);
 
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    /// <summary>Stop the subprocess (kill if still running) and clear the connection.</summary>
-    public virtual Task StopAsync()
+    /// <summary>Stop the subprocess gracefully (kill if still running after timeout) and clear the connection.</summary>
+    public virtual async Task StopAsync(int gracefulTimeoutMs = 3000)
     {
+        // Cancel internal operations first
+        _internalCts?.Cancel();
+
         if (_process != null && !_process.HasExited)
         {
-            try { _process.Kill(); } catch { /* best effort */ }
+            try
+            {
+                // Try graceful shutdown first: close input stream to signal EOF to the process
+                try { _process.StandardInput?.Close(); } catch { /* best effort */ }
+
+                // Wait for graceful exit with timeout
+                var exited = _process.WaitForExit(gracefulTimeoutMs);
+                if (!exited)
+                {
+                    // Force kill if still running
+                    _process.Kill(entireProcessTree: true);
+                    await _process.WaitForExitAsync().ConfigureAwait(false);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Process already exited - this is fine
+            }
+            catch (Exception)
+            {
+                // Best effort kill if other methods failed
+                try { _process.Kill(entireProcessTree: true); } catch { /* best effort */ }
+            }
+            finally
+            {
+                // Ensure process resources are released
+                try { _process.Dispose(); } catch { /* best effort */ }
+            }
         }
+
+        // Wait for stderr reader to complete (with timeout)
+        if (_stderrReaderTask != null)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(1000);
+                await _stderrReaderTask.WaitAsync(cts.Token).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch (TimeoutException) { }
+            catch (Exception) { /* best effort */ }
+            _stderrReaderTask = null;
+        }
+
         _connection = null;
         _process = null;
-        return Task.CompletedTask;
     }
 
     private static ProcessStartInfo CloneStartInfo(ProcessStartInfo source)
@@ -113,9 +164,9 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
         return clone;
     }
 
-    private static void StartStderrReader(TextReader stderr, TextWriter sink, CancellationToken cancellationToken)
+    private static Task StartStderrReader(TextReader stderr, TextWriter sink, CancellationToken cancellationToken)
     {
-        _ = Task.Run(async () =>
+        return Task.Run(async () =>
         {
             try
             {
@@ -197,6 +248,9 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
     protected virtual void Dispose(bool disposing)
     {
         if (disposing)
-            _ = StopAsync();
+        {
+            try { StopAsync().GetAwaiter().GetResult(); } catch { /* best effort */ }
+            _internalCts?.Dispose();
+        }
     }
 }
