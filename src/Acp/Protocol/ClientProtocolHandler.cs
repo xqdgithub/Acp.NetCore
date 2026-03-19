@@ -42,10 +42,9 @@ public class ClientProtocolHandler : IProtocolHandler
                 return BuildErrorResponse(null, -32600, "Invalid Request: missing method");
 
             var method = methodEl.GetString() ?? "";
-            // 与 Python SDK 一致：仅当存在 "id" 键时为请求（需回复），否则为通知（不回复）
             var hasId = root.TryGetProperty("id", out var idElement);
             if (hasId)
-                id = idElement.ValueKind == JsonValueKind.String ? idElement.GetString() : idElement.GetRawText();
+                id = idElement.Clone();
             isNotification = !hasId;
 
             JsonElement? parameters = null;
@@ -54,7 +53,6 @@ public class ClientProtocolHandler : IProtocolHandler
 
             var result = await _dispatcher.DispatchAsync(method, parameters, cancellationToken);
 
-            // JSON-RPC 2.0: 通知不得回复
             if (isNotification)
                 return null;
 

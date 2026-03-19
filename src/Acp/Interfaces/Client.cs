@@ -13,13 +13,17 @@ namespace Acp.Interfaces;
 /// </summary>
 public class Client : IClient
 {
+    /// <summary>
+    /// 默认实现：不自动决定，子类应重写以询问用户或按策略响应（ACP: session/request_permission）。
+    /// </summary>
     public virtual Task<RequestPermissionResponse> RequestPermissionAsync(
         IEnumerable<PermissionOption> options,
         string sessionId,
         ToolCallUpdate toolCall,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(PermissionOutcomes.SelectedResponse(options.FirstOrDefault()?.Id));
+        throw new NotImplementedException(
+            "Override RequestPermissionAsync to handle permission requests (e.g. prompt user or auto-allow).");
     }
 
     public virtual Task SessionUpdateAsync(

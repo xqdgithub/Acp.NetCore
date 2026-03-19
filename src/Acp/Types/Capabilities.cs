@@ -126,6 +126,17 @@ public class EnvVariable
 }
 
 /// <summary>
+/// ACP permission option kind (https://agentclientprotocol.com/protocol/tool-calls#permission-options).
+/// </summary>
+public static class PermissionKind
+{
+    public const string AllowOnce = "allow_once";
+    public const string AllowAlways = "allow_always";
+    public const string RejectOnce = "reject_once";
+    public const string RejectAlways = "reject_always";
+}
+
+/// <summary>
 /// Permission option (ACP: optionId, name, kind)
 /// </summary>
 public class PermissionOption

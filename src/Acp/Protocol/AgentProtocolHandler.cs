@@ -32,6 +32,7 @@ public class AgentProtocolHandler : IProtocolHandler
     public async Task<string?> ProcessMessageAsync(string requestLine, CancellationToken cancellationToken = default)
     {
         object? id = null;
+        bool isNotification = false;
         try
         {
             using var doc = JsonDocument.Parse(requestLine);
@@ -43,7 +44,8 @@ public class AgentProtocolHandler : IProtocolHandler
             var method = methodEl.GetString() ?? "";
             var hasId = root.TryGetProperty("id", out var idElement);
             if (hasId)
-                id = idElement.ValueKind == JsonValueKind.String ? idElement.GetString() : idElement.GetRawText();
+                id = idElement.Clone();
+            isNotification = !hasId;
 
             JsonElement? parameters = null;
             if (root.TryGetProperty("params", out var paramsElement))
@@ -51,7 +53,7 @@ public class AgentProtocolHandler : IProtocolHandler
 
             var result = await _dispatcher.DispatchAsync(method, parameters, cancellationToken);
 
-            if (!hasId)
+            if (isNotification)
                 return null;
 
             var response = new { jsonrpc = "2.0", id, result };
@@ -59,10 +61,12 @@ public class AgentProtocolHandler : IProtocolHandler
         }
         catch (JsonException ex)
         {
+            if (isNotification) return null;
             return BuildErrorResponse(id, -32700, "Parse error: " + ex.Message);
         }
         catch (System.Exception ex)
         {
+            if (isNotification) return null;
             return BuildErrorResponse(id, -32603, ex.Message);
         }
     }

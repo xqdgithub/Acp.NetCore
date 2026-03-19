@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Acp.Messages;
@@ -25,6 +26,20 @@ public class SubprocessConsoleClient : SubprocessClient
         _userInput = userInput ?? throw new ArgumentNullException(nameof(userInput));
         _userOutput = userOutput ?? throw new ArgumentNullException(nameof(userOutput));
         _commandAndArgs = command + " " + string.Join(" ", args);
+    }
+
+    public override Task<RequestPermissionResponse> RequestPermissionAsync(
+        IEnumerable<PermissionOption> options,
+        string sessionId,
+        ToolCallUpdate toolCall,
+        CancellationToken cancellationToken = default)
+    {
+        var list = options as IReadOnlyList<PermissionOption> ?? options.ToList();
+        var allow = list.FirstOrDefault(o =>
+            string.Equals(o.Kind, PermissionKind.AllowOnce, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(o.Kind, PermissionKind.AllowAlways, StringComparison.OrdinalIgnoreCase));
+        var optionId = (allow ?? list.FirstOrDefault())?.Id;
+        return Task.FromResult(PermissionOutcomes.SelectedResponse(optionId));
     }
 
     public override async Task SessionUpdateAsync(string sessionId, SessionUpdate update, CancellationToken cancellationToken = default)
