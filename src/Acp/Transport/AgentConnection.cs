@@ -17,5 +17,5 @@ public class AgentConnection : Connection
     /// <summary>
     /// Access the dispatcher to register custom method handlers.
     /// </summary>
-    public AgentRequestDispatcher Dispatcher => ((AgentProtocolHandler)Handler).Dispatcher;
+    public AgentRequestDispatcher Dispatcher => ((AgentProtocolHandler)Handler).RequestDispatcher;
 }

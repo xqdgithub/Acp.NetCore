@@ -1,130 +1,53 @@
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using Acp.Messages;
 using Acp.Types;
 
 namespace Acp.Interfaces;
 
 /// <summary>
-/// Interface for ACP protocol methods available on the agent side.
-/// These methods are called by the client to interact with the agent.
+/// Agent 扩展方法接口，定义处理自定义方法和通知的能力。
+/// 允许协议扩展而不修改核心接口。
 /// </summary>
-public interface IAgent
+public interface IAgentExtensions
 {
     /// <summary>
-    /// Initialize the agent session with client capabilities.
+    /// 处理扩展方法调用
     /// </summary>
-    Task<InitializeResponse> InitializeAsync(
-        int protocolVersion,
-        ClientCapabilities? clientCapabilities = null,
-        Implementation? clientInfo = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Create a new agent session.
-    /// </summary>
-    Task<NewSessionResponse> NewSessionAsync(
-        string cwd,
-        List<McpServerConfig>? mcpServers = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Load an existing session.
-    /// </summary>
-    Task<LoadSessionResponse?> LoadSessionAsync(
-        string cwd,
-        string sessionId,
-        List<McpServerConfig>? mcpServers = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// List all available sessions.
-    /// </summary>
-    Task<ListSessionsResponse> ListSessionsAsync(
-        string? cursor = null,
-        string? cwd = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Set the session mode.
-    /// </summary>
-    Task<SetSessionModeResponse?> SetSessionModeAsync(
-        string modeId,
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Set the session model.
-    /// </summary>
-    Task<SetSessionModelResponse?> SetSessionModelAsync(
-        string modelId,
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Set a session config option.
-    /// </summary>
-    Task<SetSessionConfigOptionResponse?> SetConfigOptionAsync(
-        string configId,
-        string value,
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Authenticate with the agent.
-    /// </summary>
-    Task<AuthenticateResponse?> AuthenticateAsync(
-        string methodId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Send a prompt to the agent.
-    /// </summary>
-    Task<PromptResponse> PromptAsync(
-        IEnumerable<ContentBlock> prompt,
-        string sessionId,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Fork a session.
-    /// </summary>
-    Task<ForkSessionResponse> ForkSessionAsync(
-        string cwd,
-        string sessionId,
-        List<McpServerConfig>? mcpServers = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Resume a session.
-    /// </summary>
-    Task<ResumeSessionResponse> ResumeSessionAsync(
-        string cwd,
-        string sessionId,
-        List<McpServerConfig>? mcpServers = null,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Cancel a running prompt.
-    /// </summary>
-    Task CancelAsync(string sessionId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Handle extended method calls.
-    /// </summary>
+    /// <param name="method">方法名</param>
+    /// <param name="parameters">参数字典</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <returns>方法执行结果</returns>
     Task<Dictionary<string, object?>> ExtMethodAsync(
         string method,
         Dictionary<string, object?> parameters,
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Handle extended notifications.
+    /// 处理扩展通知
     /// </summary>
+    /// <param name="method">方法名</param>
+    /// <param name="parameters">参数字典</param>
+    /// <param name="cancellationToken">取消令牌</param>
     Task ExtNotificationAsync(
         string method,
         Dictionary<string, object?> parameters,
         CancellationToken cancellationToken = default);
+}
 
-    /// <summary>
-    /// Called when connected to a client.
-    /// </summary>
-    void OnConnect(IClient client);
+/// <summary>
+/// Agent 完整接口，组合所有子接口。
+/// 实现此接口的 Agent 将具备完整的 ACP 协议能力。
+/// </summary>
+/// <remarks>
+/// 此接口通过组合多个职责单一的子接口来实现完整的 Agent 能力：
+/// - <see cref="ISessionManagement"/>: 会话管理
+/// - <see cref="IPromptHandler"/>: 提示处理
+/// - <see cref="ISessionConfig"/>: 会话配置
+/// - <see cref="IAgentLifecycle"/>: 生命周期管理
+/// - <see cref="IAgentExtensions"/>: 扩展方法
+/// </remarks>
+public interface IAgent : ISessionManagement, IPromptHandler, ISessionConfig, IAgentLifecycle, IAgentExtensions
+{
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
@@ -25,8 +26,12 @@ public class ClientConnection : Connection
     /// <summary>
     /// Send a JSON-RPC request and wait for typed response. Must be used together with ListenAsync running (e.g. in background) so that responses are dispatched by the single read loop via the client protocol handler.
     /// </summary>
-    public new Task<T> SendRequestAsync<T>(string method, object? parameters, CancellationToken cancellationToken = default)
-        => base.SendRequestAsync<T>(method, parameters, cancellationToken);
+    /// <param name="method">RPC 方法名</param>
+    /// <param name="parameters">请求参数</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <param name="timeout">可选超时时间，默认 120 秒</param>
+    public new Task<T> SendRequestAsync<T>(string method, object? parameters, CancellationToken cancellationToken = default, TimeSpan? timeout = null)
+        => base.SendRequestAsync<T>(method, parameters, cancellationToken, timeout);
 
     /// <summary>
     /// Send a JSON-RPC notification (no response expected). Used for e.g. session/cancel.
