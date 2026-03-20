@@ -2,6 +2,9 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub issues](https://img.shields.io/github/issues/your-org/dotnet-acp.svg)](https://github.com/your-org/dotnet-acp/issues)
+[![GitHub stars](https://img.shields.io/github/stars/your-org/dotnet-acp.svg?style=social)](https://github.com/your-org/dotnet-acp/stargazers)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/your-org/dotnet-acp/pulls)
 
 **.NET 实现的 ACP（Agent Communication Protocol）客户端库**，用于与支持 ACP 的 Agent 进行会话、提示与工具调用等通信。
 
@@ -374,6 +377,173 @@ public class MySubprocessClient : SubprocessClient
 | `SessionLoadAsync(...)` | 加载现有会话 |
 | `SessionPromptAsync(...)` | 发送提示 |
 
-## 许可证
+## 🤝 贡献指南
+
+欢迎参与本项目的开发！我们诚挚地感谢每一位贡献者。
+
+### 如何贡献
+
+1. **Fork 本仓库** — 点击右上角 Fork 按钮
+2. **创建特性分支** — `git checkout -b feature/your-feature-name`
+3. **提交更改** — `git commit -m 'feat: add some feature'`
+4. **推送到分支** — `git push origin feature/your-feature-name`
+5. **创建 Pull Request** — 填写 PR 模板，描述你的更改
+
+### 代码规范
+
+- 遵循 [.NET 设计规范](https://docs.microsoft.com/zh-cn/dotnet/standard/design-guidelines/)
+- 使用 `dotnet format` 格式化代码
+- 公共 API 需添加 XML 文档注释
+- 新功能需添加单元测试
+
+### 提交信息格式
+
+遵循 [Conventional Commits](https://www.conventionalcommits.org/) 规范：
+
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+**类型 (type)：**
+- `feat`: 新功能
+- `fix`: 修复 Bug
+- `docs`: 文档更新
+- `style`: 代码格式调整
+- `refactor`: 重构
+- `test`: 测试相关
+- `chore`: 构建/工具变更
+
+**示例：**
+```
+feat(transport): add WebSocket transport support
+
+- Implement WebSocketConnection class
+- Add connection timeout configuration
+- Include unit tests
+
+Closes #42
+```
+
+### 开发环境设置
+
+```bash
+# 克隆仓库
+git clone https://github.com/your-username/dotnet-acp.git
+cd dotnet-acp
+
+# 还原依赖
+dotnet restore
+
+# 构建项目
+dotnet build
+
+# 运行测试
+dotnet test
+
+# 代码格式检查
+dotnet format --verify-no-changes
+```
+
+### 行为准则
+
+- 尊重所有贡献者
+- 保持建设性的讨论
+- 接受建设性批评
+
+## 🗺️ Roadmap
+
+### v1.0 (当前)
+
+- [x] ACP 1.0 协议核心实现
+- [x] Subprocess 传输层
+- [x] 完整的事件系统
+- [x] ILogger 集成
+- [x] 异步资源管理
+
+### v1.1 (计划中)
+
+- [ ] NuGet 包发布
+- [ ] 完整的 XML API 文档
+- [ ] 性能基准测试
+- [ ] 更多单元测试覆盖
+
+### v1.2 (未来)
+
+- [ ] WebSocket 传输层支持
+- [ ] HTTP/2 传输层支持
+- [ ] 连接池与重连机制
+- [ ] 分布式追踪集成
+
+### 长期目标
+
+- [ ] 多语言 SDK 统一接口设计
+- [ ] 云原生部署支持
+- [ ] 完整的示例项目
+
+## ❓ 常见问题
+
+### Q: 支持 .NET Framework 吗？
+
+不支持。本项目基于 .NET 10，仅支持 .NET 10 及更高版本。
+
+### Q: 如何处理进程异常退出？
+
+订阅 `ProcessExited` 事件，检查 `IsNormalExit` 属性：
+
+```csharp
+client.ProcessExited += (s, e) =>
+{
+    if (!e.IsNormalExit)
+    {
+        // 处理异常退出，可考虑重启
+        Console.WriteLine($"进程异常退出，退出码: {e.ExitCode}");
+    }
+};
+```
+
+### Q: 如何启用详细日志？
+
+```csharp
+using var loggerFactory = LoggerFactory.Create(builder =>
+    builder.SetMinimumLevel(LogLevel.Debug)
+           .AddConsole());
+
+var options = new SubprocessClientOptions
+{
+    Logger = loggerFactory.CreateLogger<SubprocessClient>()
+};
+```
+
+### Q: SessionId 是什么？需要手动管理吗？
+
+`SessionId` 用于标识 Agent 会话。默认情况下，`SubprocessClient` 会在 `SessionNewAsync` 后自动管理当前会话 ID（可通过 `AutoManageSessionId = false` 禁用）。
+
+### Q: 如何实现自定义传输方式？
+
+继承 `Connection` 基类并实现抽象方法，然后创建对应的 `ClientConnection` 或 `AgentConnection` 子类。
+
+### Q: 遇到问题怎么办？
+
+1. 查阅 [文档](docs/) 和 [示例](examples/)
+2. 搜索 [Issues](https://github.com/xqdgithub/Acp.NetCore/issues)
+3. 提交新 Issue，附带复现步骤和环境信息
+
+## 📞 联系方式
+
+- **Issues**: [GitHub Issues](https://github.com/xqdgithub/Acp.NetCore/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/xqdgithub/Acp.NetCore/discussions)
+- **安全问题**: 请通过 Security Advisories 私密报告
+
+## 📄 许可证
 
 本项目采用 [MIT](LICENSE) 许可证。
+
+---
+
+<p align="center">
+  <sub>Made with ❤️ by the dotnet-acp contributors</sub>
+</p>
