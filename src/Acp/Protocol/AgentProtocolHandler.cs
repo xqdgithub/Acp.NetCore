@@ -8,72 +8,27 @@ namespace Acp.Protocol;
 /// <summary>
 /// Protocol handler for agent side: parses JSON-RPC, dispatches to <see cref="AgentRequestDispatcher"/>, returns response line.
 /// </summary>
-public class AgentProtocolHandler : IProtocolHandler
+public sealed class AgentProtocolHandler : ProtocolHandlerBase<AgentRequestDispatcher>
 {
-    private readonly AgentRequestDispatcher _dispatcher;
-    private readonly JsonSerializerOptions _jsonOptions;
-
+    /// <summary>
+    /// 创建 Agent 端协议处理器
+    /// </summary>
+    /// <param name="agent">Agent 实现</param>
+    /// <param name="jsonOptions">可选的 JSON 序列化选项</param>
     public AgentProtocolHandler(IAgent agent, JsonSerializerOptions? jsonOptions = null)
+        : base(new AgentRequestDispatcher(agent, jsonOptions ?? CreateDefaultJsonOptions()), jsonOptions)
     {
-        _jsonOptions = jsonOptions ?? new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = null,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        };
-        _dispatcher = new AgentRequestDispatcher(agent, _jsonOptions);
     }
 
     /// <summary>
-    /// Dispatcher for registering custom method handlers.
+    /// 获取分发器以注册自定义方法处理器
     /// </summary>
-    public AgentRequestDispatcher Dispatcher => _dispatcher;
+    public AgentRequestDispatcher RequestDispatcher => Dispatcher;
 
     /// <inheritdoc />
-    public async Task<string?> ProcessMessageAsync(string requestLine, CancellationToken cancellationToken = default)
-    {
-        object? id = null;
-        bool isNotification = false;
-        try
-        {
-            using var doc = JsonDocument.Parse(requestLine);
-            var root = doc.RootElement;
-
-            if (!root.TryGetProperty("method", out var methodEl))
-                return BuildErrorResponse(null, -32600, "Invalid Request: missing method");
-
-            var method = methodEl.GetString() ?? "";
-            var hasId = root.TryGetProperty("id", out var idElement);
-            if (hasId)
-                id = idElement.Clone();
-            isNotification = !hasId;
-
-            JsonElement? parameters = null;
-            if (root.TryGetProperty("params", out var paramsElement))
-                parameters = paramsElement;
-
-            var result = await _dispatcher.DispatchAsync(method, parameters, cancellationToken);
-
-            if (isNotification)
-                return null;
-
-            var response = new { jsonrpc = "2.0", id, result };
-            return JsonSerializer.Serialize(response, _jsonOptions);
-        }
-        catch (JsonException ex)
-        {
-            if (isNotification) return null;
-            return BuildErrorResponse(id, -32700, "Parse error: " + ex.Message);
-        }
-        catch (System.Exception ex)
-        {
-            if (isNotification) return null;
-            return BuildErrorResponse(id, -32603, ex.Message);
-        }
-    }
-
-    private static string BuildErrorResponse(object? id, int code, string message)
-    {
-        var error = new { jsonrpc = "2.0", id, error = new { code, message } };
-        return JsonSerializer.Serialize(error);
-    }
+    protected override Task<object?> DispatchCoreAsync(
+        string method, 
+        JsonElement? parameters, 
+        CancellationToken cancellationToken)
+        => Dispatcher.DispatchAsync(method, parameters, cancellationToken);
 }

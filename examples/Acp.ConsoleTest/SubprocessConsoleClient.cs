@@ -21,11 +21,17 @@ public class SubprocessConsoleClient : SubprocessClient
     private string _lastSessionUpdateKind = "";
 
     public SubprocessConsoleClient(string command, string[] args, TextReader userInput, TextWriter userOutput)
-        : base(command, args, new SubprocessClientOptions { Stderr = userOutput })
+        : base(command, args, new SubprocessClientOptions())
     {
         _userInput = userInput ?? throw new ArgumentNullException(nameof(userInput));
         _userOutput = userOutput ?? throw new ArgumentNullException(nameof(userOutput));
         _commandAndArgs = command + " " + string.Join(" ", args);
+        
+        // 使用新的事件机制处理 stderr
+        StderrReceived += (sender, e) =>
+        {
+            _userOutput.WriteLine($"[Agent stderr] {e.Line}");
+        };
     }
 
     public override Task<RequestPermissionResponse> RequestPermissionAsync(
@@ -111,7 +117,6 @@ public class SubprocessConsoleClient : SubprocessClient
             _userOutput.WriteLine();
 
             var sessionResponse = await SessionNewAsync(Directory.GetCurrentDirectory(), new List<McpServerConfig>(), requestCts.Token).ConfigureAwait(false);
-            CurrentSessionId = sessionResponse.SessionId;
             _userOutput.WriteLine($"Session created: {CurrentSessionId}");
             _userOutput.WriteLine();
 
@@ -210,7 +215,6 @@ public class SubprocessConsoleClient : SubprocessClient
 
             case "/new":
                 var response = await SessionNewAsync(Directory.GetCurrentDirectory(), new List<McpServerConfig>(), requestCts.Token).ConfigureAwait(false);
-                CurrentSessionId = response.SessionId;
                 _userOutput.WriteLine($"New session: {CurrentSessionId}");
                 break;
 

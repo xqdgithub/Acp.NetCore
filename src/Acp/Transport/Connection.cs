@@ -21,6 +21,9 @@ public class Connection
         new(StringComparer.Ordinal);
     protected readonly JsonSerializerOptions _jsonOptions;
 
+    /// <summary>默认请求超时时间（120 秒）</summary>
+    protected TimeSpan DefaultTimeout { get; set; } = TimeSpan.FromSeconds(120);
+
     /// <summary>
     /// The protocol handler used for incoming messages. Exposed for subclasses that need to access handler-specific APIs (e.g. Dispatcher).
     /// </summary>
@@ -60,8 +63,17 @@ public class Connection
     /// <summary>
     /// Send a JSON-RPC request and wait for response. Registers a pending TCS by request id; the single read loop completes it when a response line with matching id is received.
     /// </summary>
-    protected async Task<T> SendRequestAsync<T>(string method, object? parameters, CancellationToken cancellationToken)
+    /// <param name="method">RPC 方法名</param>
+    /// <param name="parameters">请求参数</param>
+    /// <param name="cancellationToken">取消令牌</param>
+    /// <param name="timeout">可选超时时间，默认使用 <see cref="DefaultTimeout"/></param>
+    /// <exception cref="TimeoutException">请求超时时抛出</exception>
+    protected async Task<T> SendRequestAsync<T>(string method, object? parameters, CancellationToken cancellationToken, TimeSpan? timeout = null)
     {
+        var effectiveTimeout = timeout ?? DefaultTimeout;
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(effectiveTimeout);
+
         var requestId = Guid.NewGuid().ToString();
         var request = new { jsonrpc = "2.0", id = requestId, method, @params = parameters };
         var json = JsonSerializer.Serialize(request, _jsonOptions);
@@ -74,9 +86,9 @@ public class Connection
         {
             await LogTransportAsync("SEND", json).ConfigureAwait(false);
             await _output.WriteLineAsync(json);
-            await _output.FlushAsync(cancellationToken);
+            await _output.FlushAsync(timeoutCts.Token);
 
-            using (cancellationToken.Register(() => tcs.TrySetCanceled()))
+            using (timeoutCts.Token.Register(() => tcs.TrySetCanceled()))
             {
                 var responseLine = await tcs.Task;
                 if (string.IsNullOrEmpty(responseLine))
@@ -93,6 +105,10 @@ public class Connection
                 return JsonSerializer.Deserialize<T>(resultEl, _jsonOptions)
                     ?? throw new InvalidOperationException("Failed to deserialize response");
             }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"Request '{method}' timed out after {effectiveTimeout.TotalSeconds:F1}s");
         }
         finally
         {

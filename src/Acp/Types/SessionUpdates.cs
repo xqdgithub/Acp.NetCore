@@ -243,8 +243,27 @@ public class UsageUpdate : SessionUpdate
     [JsonPropertyName("used")]
     public int Used { get; init; }
 
+    /// <summary>
+    /// 成本信息，可能是数字、字符串或对象。使用 JsonElement 以类型安全的方式表示。
+    /// </summary>
     [JsonPropertyName("cost")]
-    public object? Cost { get; init; }
+    public JsonElement? Cost { get; init; }
+
+    /// <summary>
+    /// 获取成本作为数值（如果 Cost 是数字类型）
+    /// </summary>
+    [JsonIgnore]
+    public decimal? CostAsDecimal => Cost?.ValueKind == JsonValueKind.Number
+        ? Cost.Value.GetDecimal()
+        : null;
+
+    /// <summary>
+    /// 获取成本作为字符串（如果 Cost 是字符串类型）
+    /// </summary>
+    [JsonIgnore]
+    public string? CostAsString => Cost?.ValueKind == JsonValueKind.String
+        ? Cost.Value.GetString()
+        : null;
 
     public UsageUpdate() { Type = "usage_update"; }
 }

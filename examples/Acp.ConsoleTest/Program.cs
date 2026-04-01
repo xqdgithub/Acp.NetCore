@@ -85,7 +85,7 @@ class Program
             case "cursor":return cursorCLI;
              case "qwen":return qwen;
             case "agent": return cursorCLI;
-            default: return opencodeCLI;
+            default: return cursorCLI;
 
         }
     }
