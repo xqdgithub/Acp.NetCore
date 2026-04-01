@@ -15,6 +15,7 @@ public class Connection
 {
     private readonly TextReader _input;
     private readonly TextWriter _output;
+    private readonly TextWriter? _transportLog;
     private readonly IProtocolHandler _handler;
     private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pendingResponses =
         new(StringComparer.Ordinal);
@@ -28,16 +29,32 @@ public class Connection
     /// <summary>
     /// Create a connection that uses the given protocol handler for incoming messages.
     /// </summary>
-    public Connection(TextReader input, TextWriter output, IProtocolHandler handler, JsonSerializerOptions? jsonOptions = null)
+    public Connection(TextReader input, TextWriter output, IProtocolHandler handler, JsonSerializerOptions? jsonOptions = null, TextWriter? transportLog = null)
     {
         _input = input;
         _output = output;
+        _transportLog = transportLog;
         _handler = handler;
         _jsonOptions = jsonOptions ?? new JsonSerializerOptions
         {
             PropertyNamingPolicy = null,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         };
+    }
+
+    private async Task LogTransportAsync(string category, string message)
+    {
+        if (_transportLog == null) return;
+        try
+        {
+            var logLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [{category}] {message}";
+            await _transportLog.WriteLineAsync(logLine).ConfigureAwait(false);
+            await _transportLog.FlushAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // 记录原始传输日志失败时不影响主流程
+        }
     }
 
     /// <summary>
@@ -55,6 +72,7 @@ public class Connection
 
         try
         {
+            await LogTransportAsync("SEND", json).ConfigureAwait(false);
             await _output.WriteLineAsync(json);
             await _output.FlushAsync(cancellationToken);
 
@@ -90,6 +108,7 @@ public class Connection
         var notification = new { jsonrpc = "2.0", method, @params = parameters };
         var json = JsonSerializer.Serialize(notification, _jsonOptions);
 
+        await LogTransportAsync("SEND", json).ConfigureAwait(false);
         await _output.WriteLineAsync(json);
         await _output.FlushAsync(cancellationToken);
     }
@@ -113,6 +132,7 @@ public class Connection
         {
             var line = await _input.ReadLineAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(line)) continue;
+            await LogTransportAsync("RECV", line).ConfigureAwait(false);
 
             try
             {
@@ -133,33 +153,41 @@ public class Connection
                 var response = await _handler.ProcessMessageAsync(line, cancellationToken);
                 if (response != null)
                 {
+                    await LogTransportAsync("SEND", response).ConfigureAwait(false);
                     await _output.WriteLineAsync(response);
                     await _output.FlushAsync(cancellationToken);
                 }
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
+                await LogTransportAsync("ERROR", $"JsonException: {ex.Message}; Raw={line}").ConfigureAwait(false);
                 // 非 JSON 或无效 JSON：仍交给 handler 处理（可能返回解析错误响应）
                 try
                 {
                     var response = await _handler.ProcessMessageAsync(line, cancellationToken);
                     if (response != null)
                     {
+                        await LogTransportAsync("SEND", response).ConfigureAwait(false);
                         await _output.WriteLineAsync(response);
                         await _output.FlushAsync(cancellationToken);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception innerEx)
                 {
-                    Console.Error.WriteLine($"Error processing message: {ex.Message}");
+                    await LogTransportAsync("ERROR", $"Error processing message: {innerEx.Message}").ConfigureAwait(false);
+                    if (_transportLog == null)
+                        Console.Error.WriteLine($"Error processing message: {innerEx.Message}");
                 }
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Error processing message: {ex.Message}");
+                await LogTransportAsync("ERROR", $"Error processing message: {ex.Message}").ConfigureAwait(false);
+                if (_transportLog == null)
+                    Console.Error.WriteLine($"Error processing message: {ex.Message}");
             }
         }
 
+        await LogTransportAsync("ERROR", "Connection closed").ConfigureAwait(false);
         foreach (var kv in _pendingResponses)
             kv.Value.TrySetException(new InvalidOperationException("Connection closed"));
         _pendingResponses.Clear();

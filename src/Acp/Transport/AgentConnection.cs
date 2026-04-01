@@ -9,8 +9,8 @@ namespace Acp.Transport;
 /// </summary>
 public class AgentConnection : Connection
 {
-    public AgentConnection(IAgent agent, TextReader input, TextWriter output)
-        : base(input, output, new AgentProtocolHandler(agent))
+    public AgentConnection(IAgent agent, TextReader input, TextWriter output, TextWriter? transportLog = null)
+        : base(input, output, new AgentProtocolHandler(agent), transportLog: transportLog)
     {
     }
 

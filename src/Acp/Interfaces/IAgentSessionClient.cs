@@ -35,6 +35,18 @@ public interface IAgentSessionClient
     /// <summary>Set current session mode (optional). ACP: session/set_mode</summary>
     Task<SetSessionModeResponse> SessionSetModeAsync(string sessionId, string modeId, CancellationToken cancellationToken = default);
 
+    /// <summary>Set current session model (optional). ACP: session/set_model</summary>
+    Task<SetSessionModelResponse> SessionSetModelAsync(string sessionId, string modelId, CancellationToken cancellationToken = default);
+
+    /// <summary>Set current session config option (optional). ACP: session/set_config_option</summary>
+    Task<SetSessionConfigOptionResponse> SessionSetConfigOptionAsync(string sessionId, string configId, string value, CancellationToken cancellationToken = default);
+
+    /// <summary>Fork current session (optional; requires sessionCapabilities.fork). ACP: session/fork</summary>
+    Task<ForkSessionResponse> SessionForkAsync(string sessionId, string cwd, List<McpServerConfig>? mcpServers = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Resume an existing session (optional; requires sessionCapabilities.resume). ACP: session/resume</summary>
+    Task<ResumeSessionResponse> SessionResumeAsync(string sessionId, string cwd, List<McpServerConfig>? mcpServers = null, CancellationToken cancellationToken = default);
+
     /// <summary>List sessions (optional; requires sessionCapabilities.list). ACP: session/list</summary>
     Task<ListSessionsResponse> SessionListAsync(string? cwd = null, string? cursor = null, CancellationToken cancellationToken = default);
 }

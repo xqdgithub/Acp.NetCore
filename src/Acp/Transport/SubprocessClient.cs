@@ -64,7 +64,7 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
         startInfo.RedirectStandardError = true;
         startInfo.StandardInputEncoding = System.Text.Encoding.UTF8;
         startInfo.StandardOutputEncoding = System.Text.Encoding.UTF8;
-        startInfo.StandardErrorEncoding = System.Text.Encoding.UTF8;
+        //startInfo.StandardErrorEncoding = System.Text.Encoding.UTF8;
         startInfo.CreateNoWindow = true;
 
         _process = new Process { StartInfo = startInfo };
@@ -76,9 +76,9 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
         var processStderr = _process.StandardError;
 
         if (_options?.Stderr != null && processStderr != null)
-            _stderrReaderTask = StartStderrReader(processStderr, _options.Stderr, _internalCts!.Token);
+            _stderrReaderTask = StartStderrReader(processStderr, _options.Stderr, _options.TransportLog, _internalCts!.Token);
 
-        _connection = new ClientConnection(this, processOutput, processInput);
+        _connection = new ClientConnection(this, processOutput, processInput, _options?.TransportLog);
         _ = _connection.ListenAsync(_internalCts!.Token);
 
         await Task.CompletedTask.ConfigureAwait(false);
@@ -164,7 +164,7 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
         return clone;
     }
 
-    private static Task StartStderrReader(TextReader stderr, TextWriter sink, CancellationToken cancellationToken)
+    private static Task StartStderrReader(TextReader stderr, TextWriter sink, TextWriter? transportLog, CancellationToken cancellationToken)
     {
         return Task.Run(async () =>
         {
@@ -173,12 +173,31 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
                 string? line;
                 while (!cancellationToken.IsCancellationRequested && (line = await stderr.ReadLineAsync(cancellationToken).ConfigureAwait(false)) != null)
                 {
-                    await sink.WriteLineAsync("[Agent stderr] " + line).ConfigureAwait(false);
-                    await sink.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    if (transportLog != null)
+                    {
+                        await transportLog.WriteLineAsync($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [STDERR] {line}").ConfigureAwait(false);
+                        await transportLog.FlushAsync().ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await sink.WriteLineAsync("[Agent stderr] " + line).ConfigureAwait(false);
+                        await sink.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception) { /* best effort */ }
+            catch (Exception ex)
+            {
+                if (transportLog != null)
+                {
+                    try
+                    {
+                        await transportLog.WriteLineAsync($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [ERROR] Stderr reader failed: {ex.Message}").ConfigureAwait(false);
+                        await transportLog.FlushAsync().ConfigureAwait(false);
+                    }
+                    catch { /* best effort */ }
+                }
+            }
         }, cancellationToken);
     }
 
@@ -232,6 +251,22 @@ public class SubprocessClient : Client, IAgentSessionClient, IDisposable
     /// <inheritdoc />
     public Task<SetSessionModeResponse> SessionSetModeAsync(string sessionId, string modeId, CancellationToken cancellationToken = default)
         => GetConnectionOrThrow().SendRequestAsync<SetSessionModeResponse>(SetSessionModeRequest.Method, new SetSessionModeRequest { SessionId = sessionId, ModeId = modeId }, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<SetSessionModelResponse> SessionSetModelAsync(string sessionId, string modelId, CancellationToken cancellationToken = default)
+        => GetConnectionOrThrow().SendRequestAsync<SetSessionModelResponse>(SetSessionModelRequest.Method, new SetSessionModelRequest { SessionId = sessionId, ModelId = modelId }, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<SetSessionConfigOptionResponse> SessionSetConfigOptionAsync(string sessionId, string configId, string value, CancellationToken cancellationToken = default)
+        => GetConnectionOrThrow().SendRequestAsync<SetSessionConfigOptionResponse>(SetSessionConfigOptionRequest.Method, new SetSessionConfigOptionRequest { SessionId = sessionId, ConfigId = configId, Value = value }, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<ForkSessionResponse> SessionForkAsync(string sessionId, string cwd, List<McpServerConfig>? mcpServers = null, CancellationToken cancellationToken = default)
+        => GetConnectionOrThrow().SendRequestAsync<ForkSessionResponse>(ForkSessionRequest.Method, new ForkSessionRequest { SessionId = sessionId, Cwd = cwd, McpServers = mcpServers ?? new List<McpServerConfig>() }, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<ResumeSessionResponse> SessionResumeAsync(string sessionId, string cwd, List<McpServerConfig>? mcpServers = null, CancellationToken cancellationToken = default)
+        => GetConnectionOrThrow().SendRequestAsync<ResumeSessionResponse>(ResumeSessionRequest.Method, new ResumeSessionRequest { SessionId = sessionId, Cwd = cwd, McpServers = mcpServers ?? new List<McpServerConfig>() }, cancellationToken);
 
     /// <inheritdoc />
     public Task<ListSessionsResponse> SessionListAsync(string? cwd = null, string? cursor = null, CancellationToken cancellationToken = default)

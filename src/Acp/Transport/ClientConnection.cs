@@ -11,8 +11,8 @@ namespace Acp.Transport;
 /// </summary>
 public class ClientConnection : Connection
 {
-    public ClientConnection(IClient client, TextReader input, TextWriter output)
-        : base(input, output, new ClientProtocolHandler(client))
+    public ClientConnection(IClient client, TextReader input, TextWriter output, TextWriter? transportLog = null)
+        : base(input, output, new ClientProtocolHandler(client), transportLog: transportLog)
     {
     }
 
